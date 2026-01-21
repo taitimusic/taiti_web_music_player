@@ -1,0 +1,1224 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Web Music Player (Liquid + Emo Flow)</title>
+  <!-- (C) taiti -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --vh: 1vh;
+      --ui-bg: rgba(10,10,14,.55);
+      --ui-border: rgba(255,255,255,.12);
+      --ui-text: rgba(255,255,255,.92);
+      --ui-muted: rgba(255,255,255,.65);
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #000;
+      color: var(--ui-text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
+      overflow: hidden;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* iPhone Safari対策: 100vhのズレを--vhで補正 */
+    #app {
+      position: relative;
+      width: 100vw;
+      height: calc(var(--vh, 1vh) * 100);
+      /* 新しいviewport単位が使えるブラウザでは上書き */
+      height: 100svh;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .ui {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 12px;
+      border: 1px solid var(--ui-border);
+      background: var(--ui-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+
+      /* Safe area */
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .title {
+      font-size: 13px;
+      line-height: 1.25;
+      font-weight: 650;
+      letter-spacing: .01em;
+      margin: 0;
+    }
+    .meta {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--ui-muted);
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--ui-text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      user-select: none;
+    }
+    button:active { transform: translateY(1px); }
+
+    .small {
+      padding: 8px 10px;
+      font-size: 11px;
+      opacity: .95;
+    }
+
+    .slider {
+      width: 120px;
+      accent-color: #fff;
+    }
+
+    .subrow{
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .pill {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      border-radius: 14px;
+      font-size: 11px;
+      color: var(--ui-muted);
+    }
+
+    select {
+      width: 100%;
+      border-radius: 12px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(12,12,16,.72);
+      color: var(--ui-text);
+      font-size: 12px;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    select option {
+      background-color: #14141c;
+      color: #f2f4ff;
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 10px;
+      color: rgba(255,255,255,.55);
+    }
+
+    @media (min-width: 720px){
+      .ui{ left: 16px; right: 16px; bottom: 16px; padding: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+      .slider{ width: 160px; }
+    }
+  
+    .errBox{
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: 12px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,80,80,.35);
+      background: rgba(20,0,0,.6);
+      color: rgba(255,220,220,.95);
+      border-radius: 14px;
+      font-size: 11px;
+      line-height: 1.35;
+      z-index: 50;
+      display: none;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .credit {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.45);
+      z-index: 40;
+      pointer-events: none;
+    }
+
+  </style>
+
+  <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js" crossorigin="anonymous"></script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+</head>
+<body>
+  <div id="app">
+    <canvas id="c"></canvas>
+    <div class="errBox" id="errBox"></div>
+
+    <div class="ui" id="ui">
+      <div class="row">
+        <div>
+          <p class="title" id="trackTitle">Track</p>
+          <div class="meta" id="trackMeta">Artist</div>
+        </div>
+        <div class="controls">
+          <button class="small" id="prevBtn">⟵</button>
+          <button id="playBtn">▶︎</button>
+          <button class="small" id="nextBtn">⟶</button>
+        </div>
+      </div>
+
+      <div class="subrow">
+        <div class="pill">
+          <span>音量</span>
+          <input id="vol" class="slider" type="range" min="0" max="1" step="0.01" value="0.9" />
+        </div>
+        <div class="pill">
+          <span>Dark Mode</span>
+          <button class="small" id="abstractBtn">OFF</button>
+        </div>
+      </div>
+
+      <div class="subrow" style="grid-template-columns: 1fr;">
+        <select id="patternSelect" title="背景パターン">
+          <option value="0">Neural Memory</option>
+          <option value="1">Liquid Dream</option>
+          <option value="2">Digital Glitch</option>
+          <option value="3">Aurora</option>
+          <option value="4">VHS</option>
+          <option value="5">Liminal Bloom</option>
+          <option value="6">Prismatic Haze</option>
+          <option value="7">Gravitation Lens</option>
+          <option value="8">Chrono Smear</option>
+          <option value="9">CMB Echo</option>
+          <option value="10">Neon GlitchLine</option>
+          <option value="11">Organic Tides</option>
+          <option value="12">Guided Cut</option>
+          <option value="13">Sepia Reverie</option>
+          <option value="14">Retro Technicolor</option>
+          <option value="15">Zen Monochrome</option>
+        </select>
+      </div>
+
+    </div>
+  </div>
+
+  <audio id="audio" crossorigin="anonymous" preload="auto"></audio>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+    // --- On-screen error overlay (スマホでも原因が見えるように) ---
+    const errBox = document.getElementById('errBox');
+    function showErr(msg){
+      if(!errBox) return;
+      errBox.style.display = 'block';
+      errBox.textContent = msg;
+    }
+    window.addEventListener('error', (e)=>{
+      const m = e?.message ? String(e.message) : 'Unknown error';
+      const f = e?.filename ? String(e.filename).split('/').slice(-1)[0] : '';
+      const l = e?.lineno ? `:${e.lineno}` : '';
+      showErr(`Error: ${m}
+${f}${l}`);
+    });
+    window.addEventListener('unhandledrejection', (e)=>{
+      const r = e?.reason;
+      const m = (r && (r.message || r.toString)) ? (r.message || String(r)) : String(r);
+      showErr(`Promise rejection: ${m}`);
+    });
+
+    // --------------------------
+    // USER CONFIG: 曲と画像（defaultPattern / defaultAbstract / imageIntervalSec を曲ごとに指定可能）
+    // ここにはあなたの使いたい音楽ファイルや画像ファイルへのパスを設定してください。
+    // --------------------------
+    const PLAYLIST_DATA = [
+      {
+        id: 1,
+        title: 'Track 01: エターナル・サマー',
+        artist: 'taiti',
+        defaultPattern: 10,
+        defaultAbstract: false,
+        imageIntervalSec: 38,
+        audioSrc: './music_files/placeholder.wav',
+        images: [
+          './image_files/placeholder.png'
+        ]
+      },
+      {
+        id: 2,
+        title: 'Track 02: ユメのレシピ',
+        artist: 'アイリス・ルーチェ',
+        defaultPattern: 10,
+        defaultAbstract: false,
+        audioSrc: './music_files/placeholder.wav',
+        images: [
+          './image_files/placeholder.png'
+        ]
+      },
+
+      {
+        id: 3,
+        title: 'Track 03: ちゅるるん暗黒学園',
+        artist: 'taiti',
+        defaultPattern: 5,
+        defaultAbstract: false,
+        audioSrc: './music_files/placeholder.wav',
+        images: [
+          './image_files/placeholder.png'
+        ]
+      },
+      {
+        id: 4,
+        title: 'Track 04: Blue Horizon',
+        artist: '夜風ユウマ',
+        defaultPattern: 7,
+        defaultAbstract: false,
+        defaultFilterOn: false,
+        audioSrc: './music_files/placeholder.wav',
+        images: [
+          './image_files/placeholder.png'
+        ]
+      },
+      {
+        id: 5,
+        title: 'Track 05: 運命のパズル',
+        artist: 'taiti',
+        defaultPattern: 10,
+        defaultAbstract: false,
+        imageIntervalSec: 32,
+        audioSrc: './music_files/placeholder.wav',
+        images: [
+          './image_files/placeholder.png'
+        ]
+      },
+      {
+        id: 6,
+        title: 'Track 06: 君の声',
+        artist: '星風ルナ',
+        defaultPattern: 13,
+        defaultAbstract: false,
+        audioSrc: './music_files/placeholder.wav',
+        images: [
+          './image_files/placeholder.png'
+        ]
+      }
+    ];
+
+    // --------------------------
+    // iPhone Safariの下余白対策
+    // --------------------------
+    function setVH() {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    setVH();
+    window.addEventListener('resize', setVH, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(setVH, 60), { passive: true });
+
+    // --------------------------
+    // Audio (WebAudio Analyser)
+    // --------------------------
+    class AudioEngine {
+      constructor(){
+        this.ctx = null;
+        this.analyser = null;
+        this.source = null;
+        this.freqData = null;
+        this.timeData = null;
+        this.low = 0;
+        this.high = 0;
+        this.energy = 0;
+        this.beat = 0;
+        this._ema = 0;
+        this._lastBeatT = 0;
+        this.enabled = false;
+        this._failed = false;
+      }
+      init(audioEl){
+        if(this.ctx || this._failed) return;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        try {
+          this.ctx = new Ctx();
+          this.analyser = this.ctx.createAnalyser();
+          this.analyser.fftSize = 2048;
+          this.analyser.smoothingTimeConstant = 0.85;
+          this.source = this.ctx.createMediaElementSource(audioEl);
+          this.source.connect(this.analyser);
+          this.analyser.connect(this.ctx.destination);
+          this.freqData = new Uint8Array(this.analyser.frequencyBinCount);
+          this.timeData = new Uint8Array(this.analyser.fftSize);
+          this.enabled = true;
+        } catch (err) {
+          console.warn('AudioEngine init failed (fallback):', err);
+          this._failed = true;
+          this.enabled = false;
+          this.ctx = null;
+          this.analyser = null;
+          this.source = null;
+          this.freqData = null;
+          this.timeData = null;
+        }
+      }
+
+      async resume(){
+        if(this.ctx && this.ctx.state !== 'running') await this.ctx.resume();
+      }
+      update(t){
+        if(!this.analyser || !this.freqData || !this.timeData) return;
+        this.analyser.getByteFrequencyData(this.freqData);
+        this.analyser.getByteTimeDomainData(this.timeData);
+
+        const n = this.freqData.length;
+        const lowEnd = Math.floor(n * 0.12);
+        const highStart = Math.floor(n * 0.55);
+
+        let lowSum = 0;
+        for(let i=0;i<lowEnd;i++) lowSum += this.freqData[i];
+        let highSum = 0;
+        for(let i=highStart;i<n;i++) highSum += this.freqData[i];
+
+        this.low = lowSum / (lowEnd * 255);
+        this.high = highSum / ((n - highStart) * 255);
+
+        let rms = 0;
+        for(let i=0;i<this.timeData.length;i++){
+          const v = (this.timeData[i] - 128) / 128;
+          rms += v*v;
+        }
+        rms = Math.sqrt(rms / this.timeData.length);
+        this.energy = rms;
+
+        this._ema = this._ema * 0.97 + this.low * 0.03;
+        const threshold = this._ema * 1.35 + 0.02;
+        const canBeat = (t - this._lastBeatT) > 0.18;
+        const hit = canBeat && (this.low > threshold);
+        this.beat = hit ? 1.0 : Math.max(0, this.beat - 0.06);
+        if(hit) this._lastBeatT = t;
+      }
+    }
+
+    // --------------------------
+    // Shaders: 背景（元TSXのマルチパターン）
+    // --------------------------
+    const vertexShader = `
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        gl_Position = vec4(position, 1.0);
+      }
+    `;
+
+    const fragmentShader = `
+      uniform sampler2D uTexture;
+      uniform sampler2D uNextTexture;
+      uniform float uTransition;
+      uniform float uTime;
+      uniform float uAudioLow;
+      uniform float uAudioHigh;
+      uniform vec2 uResolution;
+      uniform vec2 uMouse;
+      uniform int uPattern;
+      uniform float uAbstract;
+
+      varying vec2 vUv;
+
+      float random(vec2 st){ return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123); }
+      float noise(vec2 st){
+        vec2 i=floor(st); vec2 f=fract(st);
+        float a=random(i);
+        float b=random(i+vec2(1.0,0.0));
+        float c=random(i+vec2(0.0,1.0));
+        float d=random(i+vec2(1.0,1.0));
+        vec2 u=f*f*(3.0-2.0*f);
+        return mix(a,b,u.x) + (c-a)*u.y*(1.0-u.x) + (d-b)*u.x*u.y;
+      }
+      float fbm(vec2 st){
+        float v=0.0; float a=0.5;
+        for(int i=0;i<5;i++){ v += a*noise(st); st*=2.0; a*=0.5; }
+        return v;
+      }
+
+      void main(){
+        vec2 uv = vUv;
+        float bass = uAudioLow * 0.05;
+        float treble = uAudioHigh * 0.05;
+
+        if(uPattern==0){
+          float ripple=noise(uv*3.0+uTime*0.2);
+          uv += vec2(ripple) * bass * 2.0;
+        } else if(uPattern==1){
+          uv.x += sin(uv.y*10.0+uTime)*0.02;
+          uv.y += cos(uv.x*10.0+uTime)*0.02;
+          uv += noise(uv*4.0+uTime*0.5)*bass;
+        } else if(uPattern==2){
+          float blocks=floor(uv.y*20.0);
+          float shift=random(vec2(blocks,floor(uTime*10.0)));
+          if(shift>0.9) uv.x += 0.05*sin(uTime*50.0);
+          uv.x += (random(uv*uTime)-0.5)*bass*0.5;
+        } else if(uPattern==3){
+          float n = fbm(uv*3.0 + vec2(0.0, uTime*0.2));
+          uv.y += n*0.1;
+          uv.x += n*0.05;
+        } else if(uPattern==4){
+          uv.x += sin(uv.y*100.0 + uTime*10.0)*0.001;
+          float scanline = sin(uv.y*800.0)*0.1*uAudioHigh;
+          uv.y += scanline;
+        }
+
+        else if(uPattern==5){
+          // Liminal Bloom: 呼吸するような“にじみ”と、記憶が滲む感じ
+          vec2 p = uv - 0.5;
+          float r = length(p);
+          float b = (0.35 + uAudioLow) * 0.08;
+          float n = fbm(uv*2.4 + vec2(0.0, uTime*0.12));
+          uv += p * (n - 0.5) * (0.12 + r) * b;
+          uv += vec2(sin((uv.y+uTime*0.18)*8.0), cos((uv.x-uTime*0.14)*7.0)) * b * 0.35;
+        } else if(uPattern==6){
+          // Prismatic Haze: プリズム的な屈折（色彩の霞）
+          vec2 p = uv - 0.5;
+          float n = fbm(uv*3.5 + vec2(uTime*0.08, -uTime*0.06));
+          float a = (n - 0.5) * 1.6;
+          float s = sin(a), c = cos(a);
+          p = mat2(c,-s,s,c) * p;
+          float k = (0.015 + uAudioHigh*0.05) * (0.55 + uAudioLow);
+          uv = p + 0.5;
+          uv += vec2(
+            fbm(uv*5.0 + uTime*0.10) - 0.5,
+            fbm(uv*5.0 - uTime*0.09) - 0.5
+          ) * k;
+        } else if(uPattern==7){
+          // Gravitation Lens: マウス（または中央）周りの重力レンズ風歪み
+          vec2 c0 = mix(vec2(0.5), uMouse, 0.75);
+          vec2 d = uv - c0;
+          float r = length(d) + 1e-4;
+          float lens = (0.06 + uAudioLow*0.18);
+          uv -= d * (lens / (r + 0.18)) * 0.08;
+          uv += vec2(-d.y, d.x) * (0.010 + uAudioHigh*0.03) * (0.25/(r+0.15));
+        } else if(uPattern==8){
+          // Chrono Smear: 時間が横へ流れる“時相の擦れ”
+          float sm = (0.012 + uAudioLow*0.05);
+          float bands = sin((uv.y*10.0 + uTime*0.6) + fbm(uv*2.0+uTime*0.2)*2.0);
+          uv.x += bands * sm;
+          float jitter = (random(vec2(floor(uv.y*90.0), floor(uTime*18.0))) - 0.5) * sm * 0.8;
+          uv.x += jitter;
+          uv.y += (fbm(uv*6.0 + uTime*0.35) - 0.5) * sm * 0.35;
+        }
+        else if(uPattern==9){
+          // CMB Echo: 宇宙マイクロ波背景放射の“残響”のような同心リップル
+          vec2 c0 = mix(vec2(0.5), uMouse, 0.55);
+          vec2 p = uv - c0;
+          float r = length(p) + 1e-4;
+          float w = 10.0 + uAudioHigh*0.35; // リップル密度
+          float ripple = sin(r*w - uTime*(0.85 + uAudioLow*0.25));
+          float env = exp(-r*2.4);
+          float k = (0.006 + uAudioLow*0.030) * env;
+          uv += (p / r) * ripple * k;
+          // ほんの少し“赤方偏移”っぽいズレ
+          uv += vec2(0.0015, -0.0010) * (0.25 + uAudioLow*0.9) * env;
+        }
+        else if(uPattern==10){
+          // Neon Glitchline: 走査線と断続的な横ずれ
+          float line = floor(uv.y*140.0);
+          float gate = step(0.88, random(vec2(line, floor(uTime*18.0))));
+          float mag = (0.015 + uAudioHigh*0.04) * gate;
+          uv.x += (random(vec2(line, uTime*3.0)) - 0.5) * mag;
+          uv.y += sin(uv.x*40.0 + uTime*12.0) * 0.0012 * (0.4 + uAudioLow);
+        }
+        else if(uPattern==11){
+          // Organic Tides: ゆるい流体のうねり
+          vec2 p = uv - 0.5;
+          float n = fbm(uv*2.2 + vec2(uTime*0.08, -uTime*0.06));
+          float swell = (n - 0.5) * (0.05 + uAudioLow*0.12);
+          uv += p * swell;
+          uv += vec2(fbm(uv*6.0 + uTime*0.12) - 0.5, fbm(uv*6.0 - uTime*0.10) - 0.5) * 0.006;
+        }
+        else if(uPattern==12){
+          // Guided Cut: 切り替え時の鋭いスライス感
+          float bands = sin((uv.y*12.0 + uTime*0.8) + fbm(uv*3.0+uTime*0.15)*2.2);
+          float cut = smoothstep(0.2, 0.8, bands);
+          float push = (0.008 + uAudioLow*0.02) * (cut - 0.5);
+          uv.x += push;
+          uv.y += (random(vec2(floor(uv.x*90.0), floor(uTime*20.0))) - 0.5) * 0.0015;
+        }
+        float shift = 0.002 + treble;
+        vec4 t1 = vec4(
+          texture2D(uTexture, uv + vec2(shift, 0.0)).r,
+          texture2D(uTexture, uv).g,
+          texture2D(uTexture, uv - vec2(shift, 0.0)).b,
+          1.0
+        );
+        vec4 t2 = vec4(
+          texture2D(uNextTexture, uv + vec2(shift, 0.0)).r,
+          texture2D(uNextTexture, uv).g,
+          texture2D(uNextTexture, uv - vec2(shift, 0.0)).b,
+          1.0
+        );
+
+        float dissolve = noise(uv*10.0 + uTime*0.1);
+        float mixVal = smoothstep(dissolve - 0.2, dissolve + 0.2, uTransition);
+        vec4 color = mix(t1, t2, mixVal);
+
+        float brightness = dot(color.rgb, vec3(0.299,0.587,0.114));
+        vec2 gridUv = uv*100.0;
+        float dots = smoothstep(0.4,0.1, distance(fract(gridUv), vec2(0.5)));
+        float neural = smoothstep(0.4,0.6, fbm(uv*5.0));
+        float silhouette = smoothstep(0.2,0.5, brightness);
+        float structure = (dots*0.6 + neural*0.4) * silhouette;
+        vec3 abstractColor = mix(vec3(0.02,0.025,0.04), vec3(0.45,0.65,1.0), structure);
+        // (wireframe/grid overlay removed)
+        abstractColor += color.rgb * 0.12 * treble;
+        vec3 finalColor = mix(color.rgb, abstractColor, uAbstract);
+
+        float luma = dot(finalColor, vec3(0.299,0.587,0.114));
+        if(uPattern==13){
+          // Sepia Reverie: vintage warmth + faded tone
+          vec3 sepia = vec3(
+            dot(finalColor, vec3(0.393,0.769,0.189)),
+            dot(finalColor, vec3(0.349,0.686,0.168)),
+            dot(finalColor, vec3(0.272,0.534,0.131))
+          );
+          finalColor = mix(finalColor, sepia, 0.7);
+          finalColor = mix(vec3(luma), finalColor, 0.7);
+          finalColor += vec3(0.045,0.02,0.0);
+        }
+        else if(uPattern==14){
+          // Retro Technicolor: split-tone with warm highs and cool lows
+          vec3 gray = vec3(luma);
+          finalColor = mix(gray, finalColor, 1.25);
+          vec3 shadowTint = vec3(0.12,0.25,0.35);
+          vec3 highlightTint = vec3(0.98,0.58,0.25);
+          finalColor += mix(shadowTint, highlightTint, smoothstep(0.18,0.88,luma)) * 0.18;
+          finalColor = vec3(finalColor.r*1.08 + finalColor.g*0.02, finalColor.g*1.02, finalColor.b*0.95);
+        }
+        else if(uPattern==15){
+          // Zen Monochrome: clean, low-noise duotone
+          vec3 charcoal = vec3(0.12,0.11,0.10);
+          vec3 cream = vec3(0.95,0.92,0.88);
+          float t = smoothstep(0.08,0.92,luma);
+          finalColor = mix(charcoal, cream, t);
+          finalColor = mix(finalColor, vec3(luma), 0.15);
+        }
+
+        finalColor = clamp(finalColor, 0.0, 1.0);
+
+        float vignette = 1.0 - distance(vUv, vec2(0.5))*0.5;
+        if(uPattern==15) vignette = 1.0 - distance(vUv, vec2(0.5))*0.3;
+        finalColor *= vignette;
+
+        float grain = 0.1;
+        if(uPattern==13) grain = 0.16;
+        else if(uPattern==14) grain = 0.14;
+        else if(uPattern==15) grain = 0.0;
+        finalColor += (random(uv*uTime)-0.5)*grain;
+        gl_FragColor = vec4(finalColor, 1.0);
+      }
+    `;
+
+    // --------------------------
+    // Three.js setup
+    // --------------------------
+    const canvas = document.getElementById('c');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+    renderer.setClearColor(0x000000, 1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 120);
+    camera.position.set(0, 0.25, 5.2);
+
+    const bgScene = new THREE.Scene();
+    const bgCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = 'anonymous';
+
+    const uniforms = {
+      uTexture: { value: null },
+      uNextTexture: { value: null },
+      uTransition: { value: 0 },
+      uTime: { value: 0 },
+      uAudioLow: { value: 0 },
+      uAudioHigh: { value: 0 },
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+      uPattern: { value: 0 },
+      uAbstract: { value: 0 }
+    };
+
+    const bgMat = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms,
+      depthTest: false,
+      depthWrite: false
+    });
+    const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
+    bgScene.add(bgMesh);
+
+    // --------------------------
+    // 3D Flow: 粒子流体っぽい疾走感（集中点+Afterimage）
+    // --------------------------
+    const FLOW = {
+      enabled: false,
+      count: 7000,
+      bounds: 18,
+      baseSpeed: 0.68,
+      beatBoost: 2.35,
+
+      // 粘性っぽさ（簡易“流体場”）
+      fieldN: 56,
+      fieldDamp: 0.985,
+      viscosity: 0.22,
+      couple: 0.58,
+
+      // 力の味付け
+      swirl: 1.25,
+      attract: 1.25,
+      noise: 0.65,
+      damping: 0.972,
+
+      size: 0.022
+    };
+
+    const flowGroup = new THREE.Group();
+    if(!FLOW.enabled) flowGroup.visible = false;
+    scene.add(flowGroup);
+
+    const positions = new Float32Array(FLOW.count * 3);
+    const velocities = new Float32Array(FLOW.count * 3);
+
+    let fieldRangeX = 6.2;
+    let fieldRangeY = 4.0;
+    const FN = FLOW.fieldN;
+    const fieldVX = new Float32Array(FN*FN);
+    const fieldVY = new Float32Array(FN*FN);
+    const fieldVX2 = new Float32Array(FN*FN);
+    const fieldVY2 = new Float32Array(FN*FN);
+
+    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+    const fidx = (x,y)=>y*FN + x;
+
+    function sampleField(x, y){
+      const u = (x / fieldRangeX + 1) * 0.5 * (FN-1);
+      const v = (y / fieldRangeY + 1) * 0.5 * (FN-1);
+      const x0 = Math.floor(clamp(u, 0, FN-2));
+      const y0 = Math.floor(clamp(v, 0, FN-2));
+      const tx = u - x0;
+      const ty = v - y0;
+      const i00 = fidx(x0, y0);
+      const i10 = fidx(x0+1, y0);
+      const i01 = fidx(x0, y0+1);
+      const i11 = fidx(x0+1, y0+1);
+      const vx = (fieldVX[i00]*(1-tx) + fieldVX[i10]*tx)*(1-ty) + (fieldVX[i01]*(1-tx) + fieldVX[i11]*tx)*ty;
+      const vy = (fieldVY[i00]*(1-tx) + fieldVY[i10]*tx)*(1-ty) + (fieldVY[i01]*(1-tx) + fieldVY[i11]*tx)*ty;
+      return {vx, vy};
+    }
+
+    const tmpP = new THREE.Vector3();
+    const tmpV = new THREE.Vector3();
+
+    let focus = new THREE.Vector3(0, 0, 0);
+    let focusTarget = new THREE.Vector3(0, 0, 0);
+
+    function randn(){
+      return (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 0.8;
+    }
+
+    function respawn(i){
+      const ix = i*3;
+      positions[ix+0] = focus.x + randn()*0.9;
+      positions[ix+1] = focus.y + randn()*0.7;
+      positions[ix+2] = focus.z + randn()*0.9;
+      velocities[ix+0] = randn()*0.08;
+      velocities[ix+1] = randn()*0.08;
+      velocities[ix+2] = randn()*0.08;
+    }
+
+    for(let i=0;i<FLOW.count;i++) respawn(i);
+
+    const flowGeo = new THREE.BufferGeometry();
+    flowGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const flowMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: FLOW.size,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true
+    });
+
+    const flowPoints = new THREE.Points(flowGeo, flowMat);
+    flowGroup.add(flowPoints);
+
+    scene.fog = new THREE.Fog(0x000000, 4, 30);
+
+    // --------------------------
+    // Postprocessing
+    // --------------------------
+    const composer = new EffectComposer(renderer);
+
+    const bgPass = new RenderPass(bgScene, bgCam);
+    bgPass.clear = true;
+    composer.addPass(bgPass);
+
+    const mainPass = new RenderPass(scene, camera);
+    mainPass.clear = false;
+    composer.addPass(mainPass);
+
+    const after = new AfterimagePass();
+    after.uniforms['damp'].value = 0.92;
+    composer.addPass(after);
+
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), 0.75, 0.6, 0.22);
+    composer.addPass(bloom);
+
+    // --------------------------
+    // UI + Playlist
+    // --------------------------
+    const audioEl = document.getElementById('audio');
+    const playBtn = document.getElementById('playBtn');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const vol = document.getElementById('vol');
+    const trackTitle = document.getElementById('trackTitle');
+    const trackMeta = document.getElementById('trackMeta');
+    const patternSelect = document.getElementById('patternSelect');
+    const abstractBtn = document.getElementById('abstractBtn');
+
+    const audio = new AudioEngine();
+
+    audioEl.addEventListener('error', ()=>{
+      const src = audioEl?.currentSrc || audioEl?.src || '';
+      if(src) showErr(`Audio load failed.
+${src}`);
+      else showErr('Audio load failed.');
+    });
+
+    let index = 0;
+    let isPlaying = false;
+    let abstract = 0;
+    let imageIntervalMs = 30000;
+
+    function setTrackUI(){
+      const t = PLAYLIST_DATA[index];
+      trackTitle.textContent = t.title;
+      trackMeta.textContent = t.artist;
+    }
+
+    function pickImage(track){
+      const imgs = track.images || [];
+      if(imgs.length === 0) return null;
+      return imgs[Math.floor(Math.random() * imgs.length)];
+    }
+
+    let currentTex = null;
+    let nextTex = null;
+    let transitioning = false;
+    let transStart = 0;
+    let _imgFailOnce = false;
+
+    function loadTexture(url){
+      return new Promise((resolve, reject)=>{
+        loader.load(
+          url,
+          (tex)=>{
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            resolve(tex);
+          },
+          undefined,
+          (e)=>reject(e)
+        );
+      });
+    }
+
+    async function setBackgroundForTrack(track){
+      const url = pickImage(track);
+      if(!url) return;
+      const tex = await loadTexture(url).catch(()=>null);
+      if(!tex){
+        if(!_imgFailOnce){
+          _imgFailOnce = true;
+          showErr(`Image load failed.
+${url}`);
+        }
+        return;
+      }
+
+      if(!currentTex){
+        currentTex = tex;
+        uniforms.uTexture.value = currentTex;
+        uniforms.uNextTexture.value = currentTex;
+        uniforms.uTransition.value = 0;
+        return;
+      }
+
+      nextTex = tex;
+      uniforms.uNextTexture.value = nextTex;
+      uniforms.uTransition.value = 0;
+      transitioning = true;
+      transStart = performance.now() * 0.001;
+    }
+
+    function commitTransition(){
+      if(nextTex){
+        if(currentTex) currentTex.dispose?.();
+        currentTex = nextTex;
+        uniforms.uTexture.value = currentTex;
+        nextTex = null;
+      }
+      uniforms.uTransition.value = 0;
+      transitioning = false;
+    }
+
+    async function loadTrack(i){
+      index = (i + PLAYLIST_DATA.length) % PLAYLIST_DATA.length;
+      const t = PLAYLIST_DATA[index];
+      setTrackUI();
+
+      // --- Track default pattern ---
+      const maxPat = 15;
+      const defPatRaw = (typeof t.defaultPattern === 'number') ? t.defaultPattern : (parseInt(patternSelect.value, 10) || 0);
+      const defPat = Math.max(0, Math.min(maxPat, (defPatRaw|0)));
+      patternSelect.value = String(defPat);
+      uniforms.uPattern.value = defPat;
+
+      // --- Track default abstract (true/false) ---
+      const defAbsRaw = t.defaultAbstract;
+      const defAbs = (typeof defAbsRaw === 'boolean') ? defAbsRaw : (typeof defAbsRaw === 'number' ? !!defAbsRaw : (abstract > 0.5));
+      abstract = defAbs ? 1 : 0;
+      abstractBtn.textContent = abstract ? 'ON' : 'OFF';
+      uniforms.uAbstract.value = abstract;
+
+      // --- Track image interval (seconds) ---
+      const intervalRaw = Number(t.imageIntervalSec);
+      imageIntervalMs = (Number.isFinite(intervalRaw) && intervalRaw > 0) ? (intervalRaw * 1000) : 30000;
+
+      setBackgroundForTrack(t);
+      imgSwapT = performance.now();
+
+      audioEl.src = t.audioSrc;
+      audioEl.load();
+      audioEl.volume = Number(vol.value);
+
+      if(isPlaying){
+        await audio.resume();
+        await audioEl.play().catch(()=>{});
+      }
+    }
+
+
+    async function togglePlay(){
+      audio.init(audioEl);
+      await audio.resume();
+
+      if(!isPlaying){
+        await audioEl.play().catch(()=>{});
+        isPlaying = true;
+        playBtn.textContent = '❚❚';
+      } else {
+        audioEl.pause();
+        isPlaying = false;
+        playBtn.textContent = '▶︎';
+      }
+    }
+
+
+    const userGesture = async ()=>{
+      audio.init(audioEl);
+      await audio.resume();
+      window.removeEventListener('pointerdown', userGesture);
+      window.removeEventListener('touchstart', userGesture);
+    };
+    window.addEventListener('pointerdown', userGesture, { passive: true, once: true });
+    window.addEventListener('touchstart', userGesture, { passive: true, once: true });
+
+    playBtn.addEventListener('click', togglePlay);
+    prevBtn.addEventListener('click', ()=>loadTrack(index-1));
+    nextBtn.addEventListener('click', ()=>loadTrack(index+1));
+
+    vol.addEventListener('input', ()=>{ audioEl.volume = Number(vol.value); });
+
+    patternSelect.addEventListener('change', ()=>{
+      uniforms.uPattern.value = parseInt(patternSelect.value, 10) || 0;
+    });
+
+    abstractBtn.addEventListener('click', ()=>{
+      abstract = abstract > 0.5 ? 0 : 1;
+      abstractBtn.textContent = abstract ? 'ON' : 'OFF';
+    });
+
+    function setMouse(e){
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = 1.0 - (e.clientY - rect.top) / rect.height;
+      uniforms.uMouse.value.set(x, y);
+      focusTarget.x += (x - 0.5) * 0.35;
+      focusTarget.y += (y - 0.5) * 0.25;
+    }
+    window.addEventListener('pointermove', setMouse, { passive: true });
+
+    const app = document.getElementById('app');
+
+    function resize(){
+      const w = app.clientWidth;
+      const h = app.clientHeight;
+      const pr = Math.min(window.devicePixelRatio || 1, 1.75);
+
+      renderer.setPixelRatio(pr);
+      renderer.setSize(w, h, false);
+      composer.setSize(w, h);
+
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+
+      uniforms.uResolution.value.set(w, h);
+      bloom.setSize(w, h);
+    }
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(app);
+    resize();
+
+    // --------------------------
+    // Animate
+    // --------------------------
+    let lastT = performance.now();
+    let imgSwapT = performance.now();
+
+    function randomFocusTarget(){
+      focusTarget.set(
+        (Math.random() - 0.5) * 2.3,
+        (Math.random() - 0.5) * 1.6,
+        (Math.random() - 0.5) * 2.4
+      );
+    }
+    randomFocusTarget();
+
+    function step(now){
+      const t = now * 0.001;
+      const dt = Math.min(0.033, (now - lastT) * 0.001);
+      lastT = now;
+
+      audio.update(t);
+      uniforms.uAudioLow.value = audio.low;
+      uniforms.uAudioHigh.value = audio.high;
+      uniforms.uTime.value = t;
+      uniforms.uAbstract.value = abstract;
+
+      if(now - imgSwapT > imageIntervalMs && PLAYLIST_DATA[index].images.length > 1){
+        imgSwapT = now;
+        setBackgroundForTrack(PLAYLIST_DATA[index]);
+      }
+
+      if(transitioning){
+        const p = Math.min(1, (t - transStart) / 1.2);
+        uniforms.uTransition.value = p;
+        if(p >= 1) commitTransition();
+      }
+
+      const camZ = 5.2 - audio.low * 0.65 - audio.beat * 0.25;
+      camera.position.z += (camZ - camera.position.z) * 0.06;
+      camera.position.y += (0.25 + Math.sin(t*0.35)*0.06 - camera.position.y) * 0.04;
+      camera.lookAt(0, 0, 0);
+
+      if(audio.beat > 0.98) randomFocusTarget();
+      const focusLerp = 0.02 + audio.low * 0.08;
+      focus.lerp(focusTarget, focusLerp);
+
+      if(FLOW.enabled){
+        const speed = FLOW.baseSpeed + audio.low * 0.9 + audio.beat * FLOW.beatBoost;
+        const timeA = t * (0.55 + audio.high * 0.35);
+
+        const absW = abstract;
+
+        const dampBase = (absW>0.5) ? 0.935 : 0.915;
+        after.uniforms['damp'].value = dampBase + (1.0 - audio.beat) * 0.04;
+        bloom.strength = (absW>0.5 ? 0.45 : 0.65) + audio.high * (absW>0.5 ? 0.55 : 0.9) + audio.beat * 0.55;
+        bloom.radius = 0.55 + audio.high * 0.25;
+        bloom.threshold = absW>0.5 ? 0.24 : 0.18;
+
+        const aspect = renderer.domElement.clientWidth / Math.max(1, renderer.domElement.clientHeight);
+        fieldRangeX = 6.2;
+        fieldRangeY = 6.2 / Math.max(0.65, aspect);
+
+        const jet = (0.55 + audio.low*1.15 + audio.beat*0.75) * FLOW.attract;
+        const swirl = (0.40 + audio.high*0.55) * FLOW.swirl;
+        const nAmp = (0.25 + audio.high*0.9) * FLOW.noise;
+
+        for(let y=0;y<FN;y++)
+        for(let x=0;x<FN;x++){
+          const i = fidx(x,y);
+          const px = (x/(FN-1)*2-1) * fieldRangeX;
+          const py = (y/(FN-1)*2-1) * fieldRangeY;
+
+          const dx = px - focus.x;
+          const dy = py - focus.y;
+          const d2 = Math.max(0.22, dx*dx + dy*dy);
+          const inv = 1.0/Math.sqrt(d2);
+          const ux = dx*inv;
+          const uy = dy*inv;
+
+          let vx = fieldVX[i] * FLOW.fieldDamp;
+          let vy = fieldVY[i] * FLOW.fieldDamp;
+          vx += ux * (jet*0.020) * dt;
+          vy += uy * (jet*0.020) * dt;
+          vx += (-uy) * (swirl*0.030) * dt * (1.0/(1.0+d2*0.2));
+          vy += ( ux) * (swirl*0.030) * dt * (1.0/(1.0+d2*0.2));
+
+          const nx = Math.sin(py*0.85 + timeA) * Math.cos(px*0.62 + timeA*1.3);
+          const ny = Math.sin(px*0.75 + timeA*1.1) * Math.cos(py*0.58 + timeA*0.9);
+          vx += nx * (nAmp*0.020) * dt;
+          vy += ny * (nAmp*0.020) * dt;
+
+          const lim = 1.15;
+          fieldVX[i] = clamp(vx, -lim, lim);
+          fieldVY[i] = clamp(vy, -lim, lim);
+        }
+
+        const vis = FLOW.viscosity;
+        for(let it=0; it<2; it++){
+          for(let y=0;y<FN;y++)
+          for(let x=0;x<FN;x++){
+            const i = fidx(x,y);
+            const xm = x>0?x-1:x;
+            const xp = x<FN-1?x+1:x;
+            const ym = y>0?y-1:y;
+            const yp = y<FN-1?y+1:y;
+            const a = fidx(xm,y), b=fidx(xp,y), c=fidx(x,ym), d=fidx(x,yp);
+            const avx = (fieldVX[a]+fieldVX[b]+fieldVX[c]+fieldVX[d]) * 0.25;
+            const avy = (fieldVY[a]+fieldVY[b]+fieldVY[c]+fieldVY[d]) * 0.25;
+            fieldVX2[i] = fieldVX[i] + (avx - fieldVX[i]) * vis;
+            fieldVY2[i] = fieldVY[i] + (avy - fieldVY[i]) * vis;
+          }
+          fieldVX.set(fieldVX2);
+          fieldVY.set(fieldVY2);
+        }
+
+        for(let i=0;i<FLOW.count;i++){
+          const ix = i*3;
+          tmpP.set(positions[ix+0], positions[ix+1], positions[ix+2]);
+          tmpV.set(velocities[ix+0], velocities[ix+1], velocities[ix+2]);
+
+          const fv = sampleField(tmpP.x, tmpP.y);
+
+          tmpV.x = tmpV.x * FLOW.damping + fv.vx * FLOW.couple;
+          tmpV.y = tmpV.y * FLOW.damping + fv.vy * FLOW.couple;
+
+          tmpV.z = tmpV.z * FLOW.damping + (0.14 + audio.low*0.30) * (0.95 + audio.beat*0.7);
+
+          tmpV.y += (audio.high - 0.25) * 0.02;
+
+          tmpP.addScaledVector(tmpV, dt * speed);
+
+          if(tmpP.length() > FLOW.bounds){
+            respawn(i);
+            continue;
+          }
+
+          positions[ix+0] = tmpP.x;
+          positions[ix+1] = tmpP.y;
+          positions[ix+2] = tmpP.z;
+          velocities[ix+0] = tmpV.x;
+          velocities[ix+1] = tmpV.y;
+          velocities[ix+2] = tmpV.z;
+        }
+        flowGeo.attributes.position.needsUpdate = true;
+
+        // (wireframe animation removed)
+
+        flowGroup.rotation.y = Math.sin(t*0.12) * 0.22;
+        flowGroup.rotation.x = Math.cos(t*0.10) * 0.10;
+
+      } else {
+        after.uniforms['damp'].value = 0.95;
+        bloom.strength = 0.55 + audio.high*0.5;
+      }
+
+      renderer.autoClear = true;
+      composer.render();
+
+      requestAnimationFrame(step);
+    }
+
+    setTrackUI();
+    loadTrack(0);
+    requestAnimationFrame(step);
+
+    audioEl.addEventListener('ended', ()=>loadTrack(index+1));
+
+  </script>
+  <div class="credit">Created by taiti</div>
+</body>
+</html>
