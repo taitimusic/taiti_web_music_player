@@ -8,8 +8,7 @@
 - New features: seekbar, auto-hide controls, scrolling track descriptions.
 
 ## Files
-- `html/taiti_music_player_demo.html` (main working file)
-- `html/taiti_music_player_demo_for_upload.html` (English demo data for sharing)
+- `taiti_web_music_player.html` (main working file)
 - Detailed guide: `HOW_TO_USE.md`
 
 ## Quick setup (USER CONFIG)

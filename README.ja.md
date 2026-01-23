@@ -9,7 +9,6 @@
 
 ## ファイル
 - `html/taiti_music_player_demo.html`（メインの編集対象）
-- `html/taiti_music_player_demo_for_upload.html`（英語のダミーデータ版）
 - 詳細ガイド: `HOW_TO_USE.ja.md`
 
 ## かんたん設定（USER CONFIG）
